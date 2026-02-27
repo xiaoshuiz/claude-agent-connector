@@ -3,7 +3,6 @@ import Foundation
 struct AppSettings: Codable, Equatable {
     var monitoredChannelIDs: String
     var claudeExecutablePath: String
-    var commandPrefix: String
     var autoConnectOnLaunch: Bool
     var notifyOnCompletion: Bool
     var maxHistoryItems: Int
@@ -11,7 +10,6 @@ struct AppSettings: Codable, Equatable {
     static let defaults = AppSettings(
         monitoredChannelIDs: "",
         claudeExecutablePath: "/usr/local/bin/claude",
-        commandPrefix: "/claude",
         autoConnectOnLaunch: false,
         notifyOnCompletion: true,
         maxHistoryItems: 100

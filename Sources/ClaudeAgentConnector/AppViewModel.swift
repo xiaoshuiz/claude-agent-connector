@@ -10,6 +10,7 @@ final class AppViewModel: ObservableObject {
     @Published var isProcessingQueue = false
     @Published var botUserID = ""
     @Published var tasks: [AgentTask]
+    @Published var mentionRecords: [MentionRecord] = []
     @Published var logs: [String] = []
     @Published var latestError: String?
 
@@ -131,6 +132,11 @@ final class AppViewModel: ObservableObject {
         appendLog("任务历史已清空。")
     }
 
+    func clearMentionRecords() {
+        mentionRecords.removeAll()
+        appendLog("@提及记录已清空。")
+    }
+
     private func setupSocketCallbacks() {
         socketClient.onConnectionStateChanged = { [weak self] connected in
             Task { @MainActor in
@@ -156,18 +162,46 @@ final class AppViewModel: ObservableObject {
             return
         }
 
-        if !settings.normalizedChannelIDs.isEmpty && !settings.normalizedChannelIDs.contains(channelID) {
+        guard isMentionTrigger(event: event, text: rawText) else {
             return
         }
 
-        guard shouldTrigger(with: rawText) else {
+        if !settings.normalizedChannelIDs.isEmpty && !settings.normalizedChannelIDs.contains(channelID) {
+            recordMention(
+                channelID: channelID,
+                messageTS: messageTS,
+                threadTS: event.threadTs,
+                userID: event.user,
+                rawText: rawText,
+                extractedPrompt: "",
+                status: .ignoredChannel
+            )
             return
         }
 
         let prompt = extractPrompt(from: rawText)
         guard !prompt.isEmpty else {
+            recordMention(
+                channelID: channelID,
+                messageTS: messageTS,
+                threadTS: event.threadTs,
+                userID: event.user,
+                rawText: rawText,
+                extractedPrompt: "",
+                status: .ignoredEmptyPrompt
+            )
             return
         }
+
+        recordMention(
+            channelID: channelID,
+            messageTS: messageTS,
+            threadTS: event.threadTs,
+            userID: event.user,
+            rawText: rawText,
+            extractedPrompt: prompt,
+            status: .queued
+        )
 
         let request = QueuedRequest(
             channelID: channelID,
@@ -296,11 +330,12 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    private func shouldTrigger(with text: String) -> Bool {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !settings.commandPrefix.isEmpty, trimmed.hasPrefix(settings.commandPrefix) {
+    private func isMentionTrigger(event: SlackMessageEvent, text: String) -> Bool {
+        if event.type == "app_mention" {
             return true
         }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !botUserID.isEmpty, trimmed.contains("<@\(botUserID)>") {
             return true
         }
@@ -308,16 +343,45 @@ final class AppViewModel: ObservableObject {
     }
 
     private func extractPrompt(from text: String) -> String {
-        var cleaned = text
+        let cleaned: String
         if !botUserID.isEmpty {
-            cleaned = cleaned.replacingOccurrences(of: "<@\(botUserID)>", with: "")
+            cleaned = text.replacingOccurrences(of: "<@\(botUserID)>", with: "")
+        } else {
+            cleaned = stripLeadingMentionToken(from: text)
         }
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
-        let trimmed = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !settings.commandPrefix.isEmpty, trimmed.hasPrefix(settings.commandPrefix) {
-            let dropped = trimmed.dropFirst(settings.commandPrefix.count)
-            return String(dropped).trimmingCharacters(in: .whitespacesAndNewlines)
+    private func stripLeadingMentionToken(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("<@"), let closing = trimmed.firstIndex(of: ">") else {
+            return trimmed
         }
-        return trimmed
+        let afterMention = trimmed.index(after: closing)
+        return String(trimmed[afterMention...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func recordMention(
+        channelID: String,
+        messageTS: String,
+        threadTS: String?,
+        userID: String?,
+        rawText: String,
+        extractedPrompt: String,
+        status: MentionRecordStatus
+    ) {
+        let record = MentionRecord(
+            sourceChannelID: channelID,
+            sourceMessageTS: messageTS,
+            sourceThreadTS: threadTS,
+            userID: userID,
+            rawText: rawText,
+            extractedPrompt: extractedPrompt,
+            status: status
+        )
+        mentionRecords.insert(record, at: 0)
+        if mentionRecords.count > max(settings.maxHistoryItems, 100) {
+            mentionRecords = Array(mentionRecords.prefix(max(settings.maxHistoryItems, 100)))
+        }
     }
 }

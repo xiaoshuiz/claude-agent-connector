@@ -27,8 +27,9 @@ The orchestration layer:
 - holds UI-facing state (`@Published`)
 - validates settings and tokens
 - receives incoming Slack events
-- applies trigger logic (prefix / mention)
+- applies mention-only trigger logic (`@app`)
 - creates and updates task history
+- creates and updates dedicated mention records
 - serializes execution with an in-memory queue
 
 ### `SlackSocketModeClient`
@@ -67,7 +68,7 @@ Local execution:
 2. Envelope is acknowledged immediately.
 3. Event is ignored unless:
    - channel matches allowlist (if configured)
-   - message starts with prefix or includes bot mention
+   - message includes app mention (or `app_mention` event type)
 4. Prompt is extracted and queued.
 5. Queue executes tasks one-by-one.
 6. Result or error is posted back to the same thread.

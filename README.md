@@ -16,11 +16,13 @@ Claude Agent Connector helps teams keep AI-assisted execution inside their Slack
 - Native **SwiftUI + AppKit** macOS app (main window + menu bar status item)
 - Real-time Slack event intake using **Socket Mode**
 - Secure token persistence via **Keychain**
-- Trigger by command prefix (default `/claude`) or bot mention
+- Trigger only by **app mention** (`@YourApp`) in Slack
 - Configurable channel allowlist (comma-separated channel IDs)
 - Serialized task queue for predictable local execution
 - Automatic threaded replies to Slack with success/failure output
 - Local history and runtime logs
+- Dedicated **@mention records** panel, separate from task history
+- Tooltips and in-app quick links for token/path setup flow
 - Optional macOS user notifications
 - Branded app icon asset set for release builds
 
@@ -56,6 +58,12 @@ Then collect:
 
 - App-level token (`xapp-...`)
 - Bot token (`xoxb-...`)
+
+In the app UI, each required input includes:
+
+- inline tooltip guidance (`help`)
+- direct links to relevant Slack/Claude docs
+- local executable path picker for Claude binary
 
 ## Local development
 
@@ -126,6 +134,7 @@ scripts/
 ## Runtime behavior and limits
 
 - Tasks are processed sequentially by design.
+- Trigger condition is mention-only: the message must mention the app user.
 - If Claude execution fails, an error message is posted to Slack.
 - The app is backend-free and runs fully on local machine.
 - Ensure your local Claude execution environment is trusted and monitored.

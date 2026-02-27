@@ -10,7 +10,7 @@ Provide a local macOS desktop app that bridges Slack trigger messages to a local
    - Use Slack `apps.connections.open` to obtain a Socket Mode WebSocket URL.
    - Receive `events_api` envelopes and send `envelope_id` acknowledgements.
 2. **Execution layer**
-   - Extract prompt from incoming message (prefix or bot mention trigger).
+   - Extract prompt from incoming message (app mention trigger only).
    - Launch local process via `claude -p "<prompt>"`.
 3. **Reply layer**
    - Post output through `chat.postMessage` to `thread_ts` (fallback to source message ts).
@@ -31,8 +31,7 @@ Provide a local macOS desktop app that bridges Slack trigger messages to a local
 
 ## 4) Trigger rules
 
-- Command prefix trigger (default `/claude`)
-- Bot mention trigger (`<@BOT_USER_ID>`)
+- App mention trigger only (`<@BOT_USER_ID>`)
 - Optional channel allowlist (multiple channel IDs)
 
 ## 5) Task model
