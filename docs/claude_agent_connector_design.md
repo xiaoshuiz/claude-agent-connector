@@ -34,6 +34,7 @@ Provide a local macOS desktop app that bridges Slack trigger messages to a local
 ## 4) Trigger rules
 
 - App mention trigger only (`<@BOT_USER_ID>`)
+- Fallback trigger for plain text `@BotName` when Slack emits `message` events without mention tokenization
 - Optional channel allowlist (multiple channel IDs)
 
 ## 5) Task model

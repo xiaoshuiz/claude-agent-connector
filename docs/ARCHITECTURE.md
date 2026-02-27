@@ -70,6 +70,7 @@ Local execution:
 3. Event is ignored unless:
    - channel matches allowlist (if configured)
    - message includes app mention (or `app_mention` event type)
+   - fallback: plain-text `@botName` mention matches when Slack sends a `message` event
 4. Prompt is extracted and queued.
 5. Before execution, recent thread turns are injected into the prompt context.
 6. Queue executes tasks one-by-one.

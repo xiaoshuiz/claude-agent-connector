@@ -164,6 +164,9 @@ If the UI says connected but Slack mention does not trigger a reply, check in th
 3. Reinstall the Slack app after any scope/event change.
 4. Invite the app to the channel where you test mentions.
 5. If channel allowlist is set, use real channel IDs (`C...`) rather than channel names.
+   - entries like `#general` are now treated as invalid and ignored (a warning will appear in Runtime Logs).
 6. Open **Runtime Logs** and **@mention records** in the app:
    - if events are received, you will see event/ignore reasons in logs;
    - if no mention record appears, Slack events are likely not reaching the app yet.
+
+Additionally, the connector has a fallback matcher for plain-text mentions such as `@Claude` (without `<@U...>` tokenization) when Slack emits regular `message` events.

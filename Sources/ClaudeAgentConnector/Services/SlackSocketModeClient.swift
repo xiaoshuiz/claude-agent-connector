@@ -129,12 +129,23 @@ final class SlackSocketModeClient {
                 return
             }
 
-            guard envelope.type == "events_api", let event = envelope.payload?.event else {
+            guard envelope.type == "events_api" else {
+                if envelope.type == "disconnect" {
+                    onLog?("Socket 收到 disconnect 信号。")
+                }
                 return
             }
+
+            guard let event = envelope.payload?.event else {
+                onLog?("收到 events_api 事件，但 payload.event 为空。")
+                return
+            }
+
             if event.type == "app_mention" || event.type == "message" {
                 onLog?("收到 Slack 事件: type=\(event.type) subtype=\(event.subtype ?? "-") channel=\(event.channel ?? "-") ts=\(event.ts ?? "-")")
                 onEvent?(event)
+            } else {
+                onLog?("忽略 Slack 事件: type=\(event.type)（当前仅处理 app_mention / message）")
             }
         } catch {
             onLog?("消息解析失败: \(error.localizedDescription)")
