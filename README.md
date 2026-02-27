@@ -36,6 +36,13 @@ Sources/ClaudeAgentConnector
     └── MainView.swift
 ```
 
+## 环境要求
+
+- macOS 14+
+- Xcode 15+
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen)（用于生成 `.xcodeproj`）
+- 本地已安装 Claude CLI（`claude`）
+
 ## 运行前准备
 
 ### 1) Slack App 配置
@@ -64,13 +71,48 @@ Sources/ClaudeAgentConnector
 
 ## 开发运行
 
-> 当前项目是 Swift Package 结构，建议在 Xcode 15+ 打开并在 macOS 上运行。
-
 ```bash
-swift package describe
+brew install xcodegen
+xcodegen generate --spec project.yml
+open ClaudeAgentConnector.xcodeproj
 ```
 
-然后使用 Xcode 打开仓库目录并运行 `ClaudeAgentConnector` 可执行目标。
+然后在 Xcode 中运行 `ClaudeAgentConnector`（Debug）。
+
+也可以命令行构建：
+
+```bash
+make debug-build
+```
+
+## 构建 release app
+
+### 本地打包（生成可分发 zip）
+
+```bash
+make release
+```
+
+产物位于：
+
+- `dist/ClaudeAgentConnector-macOS-Release.zip`
+- `dist/ClaudeAgentConnector-macOS-Release.zip.sha256`
+
+### GitHub Actions 自动 release
+
+仓库已内置两个工作流：
+
+- `.github/workflows/ci-macos.yml`：每次 push/PR 在 macOS 上构建
+- `.github/workflows/release.yml`：tag 发布时自动打包并上传 release 资产
+
+触发正式发布：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+随后在 GitHub Release 页面可直接下载 zip 版 app。
 
 ## 使用流程
 

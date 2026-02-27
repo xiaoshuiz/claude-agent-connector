@@ -1,0 +1,35 @@
+name: ClaudeAgentConnector
+
+options:
+  minimumXcodeGenVersion: 2.39.1
+  createIntermediateGroups: true
+  developmentLanguage: zh-Hans
+
+settings:
+  base:
+    SWIFT_VERSION: 5.10
+    PRODUCT_BUNDLE_IDENTIFIER: com.xiaoshuiz.claude-agent-connector
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
+
+targets:
+  ClaudeAgentConnector:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/ClaudeAgentConnector
+    settings:
+      base:
+        PRODUCT_NAME: ClaudeAgentConnector
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Claude Agent Connector
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+        INFOPLIST_KEY_NSSupportsAutomaticGraphicsSwitching: YES
+    scheme:
+      gatherCoverageData: false
+      build:
+        targets:
+          ClaudeAgentConnector: all
