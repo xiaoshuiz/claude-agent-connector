@@ -30,10 +30,45 @@ jobs:
           name: ClaudeAgentConnector-release-${{ github.ref_name }}-${{ github.sha }}
           path: dist/*
 
+      - name: Upsert rolling main-latest tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ref="tags/main-latest"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/${ref}" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/${ref}" \
+              -f sha="${GITHUB_SHA}" \
+              -f force=true >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/${ref}" \
+              -f sha="${GITHUB_SHA}" >/dev/null
+          fi
+
+      - name: Publish rolling main prerelease
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: main-latest
+          name: Main Snapshot (main-latest)
+          target_commitish: ${{ github.sha }}
+          body: |
+            Automated prerelease from main branch.
+            Commit: ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          files: |
+            dist/*.zip
+            dist/*.sha256
+
       - name: Publish GitHub Release assets
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          overwrite_files: true
           files: |
             dist/*.zip
             dist/*.sha256

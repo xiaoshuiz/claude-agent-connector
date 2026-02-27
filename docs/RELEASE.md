@@ -43,6 +43,7 @@ On pushes to `main`, the workflow:
 
 - builds the macOS release app package
 - uploads artifacts to the workflow run for download
+- updates a rolling prerelease in GitHub Releases with tag `main-latest`
 
 ## Publish a version
 
@@ -56,7 +57,12 @@ On pushes to `main`, the workflow:
 2. `release.yml` automatically:
    - builds release assets
    - uploads workflow artifacts
-   - attaches zip + checksum to GitHub Release (tag runs only)
+   - attaches zip + checksum to a versioned GitHub Release
+
+## Rolling prerelease from main
+
+Every push to `main` updates a prerelease entry tagged `main-latest`.  
+This keeps the GitHub Releases page in sync with the latest merged build, without creating a new semantic version each time.
 
 ## Versioning fields
 
