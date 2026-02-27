@@ -143,6 +143,7 @@ scripts/
 
 - Tasks are processed sequentially by design.
 - Trigger condition is mention-only: the message must mention the app user.
+- Edited messages (`message_changed`) are normalized to latest text before mention matching.
 - Context is tracked per `channel + thread_ts` and injected into subsequent prompts.
 - If Claude execution fails, an error message is posted to Slack.
 - The app is backend-free and runs fully on local machine.
