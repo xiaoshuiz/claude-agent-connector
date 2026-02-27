@@ -40,7 +40,7 @@ jobs:
           if gh api "repos/${GITHUB_REPOSITORY}/git/ref/${ref}" >/dev/null 2>&1; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/${ref}" \
               -f sha="${GITHUB_SHA}" \
-              -f force=true >/dev/null
+              -F force=true >/dev/null
           else
             gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
               -f ref="refs/${ref}" \
