@@ -2,6 +2,8 @@ name: Build Release App
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -25,7 +27,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClaudeAgentConnector-release
+          name: ClaudeAgentConnector-release-${{ github.ref_name }}-${{ github.sha }}
           path: dist/*
 
       - name: Publish GitHub Release assets
