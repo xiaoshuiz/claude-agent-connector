@@ -43,6 +43,7 @@ Additional architecture notes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Xcode 15+
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 - Claude CLI available on local machine (default path: `/usr/local/bin/claude`)
+- Claude CLI authenticated on the same macOS account (`claude login`)
 
 ## Slack app configuration
 
@@ -157,9 +158,12 @@ If the UI says connected but Slack mention does not trigger a reply, check in th
    - Socket Mode is enabled.
    - Event Subscriptions are enabled and include `app_mention` (recommended) or `message.channels`.
    - Bot scopes include `app_mentions:read` and `chat:write`.
-2. Reinstall the Slack app after any scope/event change.
-3. Invite the app to the channel where you test mentions.
-4. If channel allowlist is set, use real channel IDs (`C...`) rather than channel names.
-5. Open **Runtime Logs** and **@mention records** in the app:
+2. Verify Claude CLI authentication in terminal:
+   - run `claude -p "hello"` from your shell;
+   - if output says `Connect your account to continue`, run `claude login` first.
+3. Reinstall the Slack app after any scope/event change.
+4. Invite the app to the channel where you test mentions.
+5. If channel allowlist is set, use real channel IDs (`C...`) rather than channel names.
+6. Open **Runtime Logs** and **@mention records** in the app:
    - if events are received, you will see event/ignore reasons in logs;
    - if no mention record appears, Slack events are likely not reaching the app yet.

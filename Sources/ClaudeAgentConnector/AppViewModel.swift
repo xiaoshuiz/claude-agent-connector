@@ -88,6 +88,7 @@ final class AppViewModel: ObservableObject {
             } else {
                 try secretsStore.save(value: botToken, field: .botToken)
             }
+            latestError = nil
             appendLog("设置与密钥已保存。")
         } catch {
             latestError = error.localizedDescription
@@ -96,6 +97,8 @@ final class AppViewModel: ObservableObject {
     }
 
     func connect() async {
+        latestError = nil
+
         guard !isConnected else {
             appendLog("当前已处于连接状态。")
             return
@@ -123,6 +126,7 @@ final class AppViewModel: ObservableObject {
             }
 
             try await socketClient.connect(appLevelToken: appLevelToken)
+            latestError = nil
         } catch {
             latestError = error.localizedDescription
             appendLog("连接失败: \(error.localizedDescription)")
