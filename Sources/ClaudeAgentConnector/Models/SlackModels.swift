@@ -8,6 +8,7 @@ struct SlackOpenConnectionResponse: Decodable {
 
 struct SlackAuthTestResponse: Decodable {
     let ok: Bool
+    let user: String?
     let userId: String?
     let team: String?
     let error: String?

@@ -9,6 +9,7 @@ final class AppViewModel: ObservableObject {
     @Published var isConnected = false
     @Published var isProcessingQueue = false
     @Published var botUserID = ""
+    @Published var botUserName = ""
     @Published var tasks: [AgentTask]
     @Published var mentionRecords: [MentionRecord] = []
     @Published var logs: [String] = []
@@ -26,6 +27,7 @@ final class AppViewModel: ObservableObject {
     private var threadConversations: [String: ThreadConversation]
     private var pendingRequests: [QueuedRequest] = []
     private var isQueueRunning = false
+    private var hasLoggedInvalidChannelConfigWarning = false
     private let maxTurnsPerThreadContext = 20
     private let maxStoredThreadContexts = 500
 
@@ -76,6 +78,7 @@ final class AppViewModel: ObservableObject {
 
     func saveSettings() {
         settingsStore.save(settings)
+        logInvalidChannelConfigurationIfNeeded()
         do {
             if appLevelToken.isEmpty {
                 try secretsStore.remove(field: .appLevelToken)
@@ -122,11 +125,13 @@ final class AppViewModel: ObservableObject {
         do {
             if let auth = try await webAPIClient?.authTest() {
                 botUserID = auth.userId ?? ""
-                appendLog("Slack 鉴权成功，team=\(auth.team ?? "-") user=\(botUserID)")
+                botUserName = auth.user ?? ""
+                appendLog("Slack 鉴权成功，team=\(auth.team ?? "-") user=\(botUserID) name=\(botUserName.isEmpty ? "-" : botUserName)")
             }
 
             try await socketClient.connect(appLevelToken: appLevelToken)
             latestError = nil
+            logInvalidChannelConfigurationIfNeeded()
         } catch {
             latestError = error.localizedDescription
             appendLog("连接失败: \(error.localizedDescription)")
@@ -190,7 +195,8 @@ final class AppViewModel: ObservableObject {
             return
         }
 
-        if !settings.normalizedChannelIDs.isEmpty && !settings.normalizedChannelIDs.contains(channelID) {
+        let normalizedChannelID = channelID.uppercased()
+        if !settings.normalizedChannelIDs.isEmpty && !settings.normalizedChannelIDs.contains(normalizedChannelID) {
             appendLog("忽略事件：频道不在白名单中，channel=\(channelID)")
             recordMention(
                 channelID: channelID,
@@ -426,7 +432,16 @@ final class AppViewModel: ObservableObject {
             return true
         }
 
-        return containsMentionToken(in: text, userID: botUserID)
+        if containsMentionToken(in: text, userID: botUserID) {
+            return true
+        }
+
+        if let fallbackAlias = matchedPlainAtMentionAlias(in: text) {
+            appendLog("命中兜底触发：检测到纯文本 @\(fallbackAlias)。")
+            return true
+        }
+
+        return false
     }
 
     private func extractPrompt(from text: String) -> String {
@@ -436,7 +451,8 @@ final class AppViewModel: ObservableObject {
         } else {
             cleaned = stripLeadingMentionToken(from: text)
         }
-        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        let withoutPlainAliases = removePlainAtMentions(in: cleaned)
+        return withoutPlainAliases.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func stripLeadingMentionToken(from text: String) -> String {
@@ -468,6 +484,74 @@ final class AppViewModel: ObservableObject {
 
     private func mentionPattern(for userID: String) -> String {
         "<@\(NSRegularExpression.escapedPattern(for: userID))(?:\\|[^>]+)?>"
+    }
+
+    private func mentionAliases() -> [String] {
+        var aliases: [String] = []
+        if !botUserName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            aliases.append(botUserName)
+        }
+        if !botUserID.isEmpty {
+            aliases.append(botUserID)
+        }
+
+        var deduplicated: [String] = []
+        var seen: Set<String> = []
+        for alias in aliases {
+            let cleaned = alias
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
+            guard !cleaned.isEmpty else {
+                continue
+            }
+            let key = cleaned.lowercased()
+            if !seen.contains(key) {
+                seen.insert(key)
+                deduplicated.append(cleaned)
+            }
+        }
+        return deduplicated
+    }
+
+    private func plainAtMentionPattern(for alias: String) -> String {
+        "(?i)(?<!\\S)@\(NSRegularExpression.escapedPattern(for: alias))(?=$|\\s|[.,!?;:，。！？；：])"
+    }
+
+    private func matchedPlainAtMentionAlias(in text: String) -> String? {
+        guard !text.contains("<@") else {
+            return nil
+        }
+        for alias in mentionAliases() {
+            if text.range(of: plainAtMentionPattern(for: alias), options: .regularExpression) != nil {
+                return alias
+            }
+        }
+        return nil
+    }
+
+    private func removePlainAtMentions(in text: String) -> String {
+        var output = text
+        for alias in mentionAliases() {
+            output = output.replacingOccurrences(
+                of: plainAtMentionPattern(for: alias),
+                with: "",
+                options: .regularExpression
+            )
+        }
+        return output
+    }
+
+    private func logInvalidChannelConfigurationIfNeeded() {
+        let invalidEntries = settings.invalidMonitoredChannelEntries
+        guard !invalidEntries.isEmpty else {
+            hasLoggedInvalidChannelConfigWarning = false
+            return
+        }
+        guard !hasLoggedInvalidChannelConfigWarning else {
+            return
+        }
+        appendLog("监听频道配置包含无效条目（已忽略）: \(invalidEntries.joined(separator: ", "))。请使用频道 ID（如 C12345）。")
+        hasLoggedInvalidChannelConfigWarning = true
     }
 
     private func recordMention(
