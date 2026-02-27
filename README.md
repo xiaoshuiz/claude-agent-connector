@@ -60,6 +60,8 @@ Then collect:
 - App-level token (`xapp-...`)
 - Bot token (`xoxb-...`)
 
+After changing scopes or event subscriptions, reinstall the app to your workspace so new permissions take effect.
+
 In the app UI, each required input includes:
 
 - inline tooltip guidance (`help`)
@@ -140,3 +142,18 @@ scripts/
 - If Claude execution fails, an error message is posted to Slack.
 - The app is backend-free and runs fully on local machine.
 - Ensure your local Claude execution environment is trusted and monitored.
+
+## Troubleshooting: connected but no response after `@YourApp`
+
+If the UI says connected but Slack mention does not trigger a reply, check in this order:
+
+1. Verify Slack app settings:
+   - Socket Mode is enabled.
+   - Event Subscriptions are enabled and include `app_mention` (recommended) or `message.channels`.
+   - Bot scopes include `app_mentions:read` and `chat:write`.
+2. Reinstall the Slack app after any scope/event change.
+3. Invite the app to the channel where you test mentions.
+4. If channel allowlist is set, use real channel IDs (`C...`) rather than channel names.
+5. Open **Runtime Logs** and **@mention records** in the app:
+   - if events are received, you will see event/ignore reasons in logs;
+   - if no mention record appears, Slack events are likely not reaching the app yet.

@@ -132,12 +132,8 @@ final class SlackSocketModeClient {
             guard envelope.type == "events_api", let event = envelope.payload?.event else {
                 return
             }
-
-            if event.botId != nil {
-                return
-            }
-
             if event.type == "app_mention" || event.type == "message" {
+                onLog?("收到 Slack 事件: type=\(event.type) subtype=\(event.subtype ?? "-") channel=\(event.channel ?? "-") ts=\(event.ts ?? "-")")
                 onEvent?(event)
             }
         } catch {

@@ -165,16 +165,23 @@ final class AppViewModel: ObservableObject {
     }
 
     private func acceptIncomingEvent(_ event: SlackMessageEvent) {
+        if shouldIgnoreEvent(event) {
+            return
+        }
+
         guard let channelID = event.channel, let messageTS = event.ts, let rawText = event.text else {
+            appendLog("忽略事件：缺少 channel/ts/text，type=\(event.type) subtype=\(event.subtype ?? "-")")
             return
         }
         let rootThreadTS = event.threadTs ?? messageTS
 
         guard isMentionTrigger(event: event, text: rawText) else {
+            appendLog("忽略事件：未命中 @触发，type=\(event.type) channel=\(channelID)")
             return
         }
 
         if !settings.normalizedChannelIDs.isEmpty && !settings.normalizedChannelIDs.contains(channelID) {
+            appendLog("忽略事件：频道不在白名单中，channel=\(channelID)")
             recordMention(
                 channelID: channelID,
                 messageTS: messageTS,
@@ -189,6 +196,7 @@ final class AppViewModel: ObservableObject {
 
         let prompt = extractPrompt(from: rawText)
         guard !prompt.isEmpty else {
+            appendLog("忽略事件：@提及后未提取到有效指令。")
             recordMention(
                 channelID: channelID,
                 messageTS: messageTS,
@@ -221,6 +229,29 @@ final class AppViewModel: ObservableObject {
         appendLog("任务已入队，channel=\(channelID)")
 
         startQueueIfNeeded()
+    }
+
+    private func shouldIgnoreEvent(_ event: SlackMessageEvent) -> Bool {
+        if event.type == "message", let subtype = event.subtype {
+            // Ignore system/update wrappers; only plain user message should trigger.
+            switch subtype {
+            case "message_changed", "message_deleted", "message_replied", "bot_message":
+                appendLog("忽略事件：message 子类型 \(subtype) 不参与触发。")
+                return true
+            default:
+                break
+            }
+        }
+
+        if event.botId != nil {
+            appendLog("忽略事件：来自 bot_id 事件。")
+            return true
+        }
+        if !botUserID.isEmpty, event.user == botUserID {
+            appendLog("忽略事件：来自本应用自身消息。")
+            return true
+        }
+        return false
     }
 
     private func startQueueIfNeeded() {
@@ -362,17 +393,13 @@ final class AppViewModel: ObservableObject {
             return true
         }
 
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !botUserID.isEmpty, trimmed.contains("<@\(botUserID)>") {
-            return true
-        }
-        return false
+        return containsMentionToken(in: text, userID: botUserID)
     }
 
     private func extractPrompt(from text: String) -> String {
         let cleaned: String
         if !botUserID.isEmpty {
-            cleaned = text.replacingOccurrences(of: "<@\(botUserID)>", with: "")
+            cleaned = removeMentionTokens(for: botUserID, in: text)
         } else {
             cleaned = stripLeadingMentionToken(from: text)
         }
@@ -386,6 +413,28 @@ final class AppViewModel: ObservableObject {
         }
         let afterMention = trimmed.index(after: closing)
         return String(trimmed[afterMention...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func containsMentionToken(in text: String, userID: String) -> Bool {
+        guard !userID.isEmpty else {
+            return false
+        }
+        return text.range(of: mentionPattern(for: userID), options: .regularExpression) != nil
+    }
+
+    private func removeMentionTokens(for userID: String, in text: String) -> String {
+        guard !userID.isEmpty else {
+            return text
+        }
+        return text.replacingOccurrences(
+            of: mentionPattern(for: userID),
+            with: " ",
+            options: .regularExpression
+        )
+    }
+
+    private func mentionPattern(for userID: String) -> String {
+        "<@\(NSRegularExpression.escapedPattern(for: userID))(?:\\|[^>]+)?>"
     }
 
     private func recordMention(
