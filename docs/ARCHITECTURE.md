@@ -61,6 +61,7 @@ Local execution:
 - `SettingsStore`: app settings via `UserDefaults`
 - `KeychainStore`: token storage in Keychain
 - `TaskHistoryStore`: JSON history in Application Support
+- `ThreadConversationStore`: JSON thread context memory in Application Support
 
 ## Event handling lifecycle
 
@@ -70,9 +71,10 @@ Local execution:
    - channel matches allowlist (if configured)
    - message includes app mention (or `app_mention` event type)
 4. Prompt is extracted and queued.
-5. Queue executes tasks one-by-one.
-6. Result or error is posted back to the same thread.
-7. History and logs are persisted for troubleshooting.
+5. Before execution, recent thread turns are injected into the prompt context.
+6. Queue executes tasks one-by-one.
+7. Result or error is posted back to the same thread.
+8. Task history, mention records, logs, and thread context are persisted locally.
 
 ## Failure strategy
 

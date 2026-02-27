@@ -17,18 +17,22 @@ final class AppViewModel: ObservableObject {
     private let settingsStore: SettingsStore
     private let secretsStore: SecretsStore
     private let historyStore: TaskHistoryStore
+    private let conversationStore: ThreadConversationStore
     private let notificationService: NotificationService
     private let socketClient: SlackSocketModeClient
     private let runner: ClaudeAgentRunner
 
     private var webAPIClient: SlackWebAPIClient?
+    private var threadConversations: [String: ThreadConversation]
     private var pendingRequests: [QueuedRequest] = []
     private var isQueueRunning = false
+    private let maxTurnsPerThreadContext = 20
+    private let maxStoredThreadContexts = 500
 
     private struct QueuedRequest {
         let channelID: String
         let messageTS: String
-        let threadTS: String?
+        let threadTS: String
         let prompt: String
     }
 
@@ -36,6 +40,7 @@ final class AppViewModel: ObservableObject {
         settingsStore: SettingsStore = SettingsStore(),
         secretsStore: SecretsStore = KeychainStore(),
         historyStore: TaskHistoryStore = TaskHistoryStore(),
+        conversationStore: ThreadConversationStore = ThreadConversationStore(),
         notificationService: NotificationService = NotificationService(),
         socketClient: SlackSocketModeClient = SlackSocketModeClient(),
         runner: ClaudeAgentRunner = ClaudeAgentRunner()
@@ -43,6 +48,7 @@ final class AppViewModel: ObservableObject {
         self.settingsStore = settingsStore
         self.secretsStore = secretsStore
         self.historyStore = historyStore
+        self.conversationStore = conversationStore
         self.notificationService = notificationService
         self.socketClient = socketClient
         self.runner = runner
@@ -52,6 +58,7 @@ final class AppViewModel: ObservableObject {
         appLevelToken = secretsStore.load(field: .appLevelToken)
         botToken = secretsStore.load(field: .botToken)
         tasks = historyStore.load().sorted { $0.createdAt > $1.createdAt }
+        threadConversations = conversationStore.load()
 
         if !botToken.isEmpty {
             webAPIClient = SlackWebAPIClient(botToken: botToken)
@@ -161,6 +168,7 @@ final class AppViewModel: ObservableObject {
         guard let channelID = event.channel, let messageTS = event.ts, let rawText = event.text else {
             return
         }
+        let rootThreadTS = event.threadTs ?? messageTS
 
         guard isMentionTrigger(event: event, text: rawText) else {
             return
@@ -170,7 +178,7 @@ final class AppViewModel: ObservableObject {
             recordMention(
                 channelID: channelID,
                 messageTS: messageTS,
-                threadTS: event.threadTs,
+                threadTS: rootThreadTS,
                 userID: event.user,
                 rawText: rawText,
                 extractedPrompt: "",
@@ -184,7 +192,7 @@ final class AppViewModel: ObservableObject {
             recordMention(
                 channelID: channelID,
                 messageTS: messageTS,
-                threadTS: event.threadTs,
+                threadTS: rootThreadTS,
                 userID: event.user,
                 rawText: rawText,
                 extractedPrompt: "",
@@ -196,7 +204,7 @@ final class AppViewModel: ObservableObject {
         recordMention(
             channelID: channelID,
             messageTS: messageTS,
-            threadTS: event.threadTs,
+            threadTS: rootThreadTS,
             userID: event.user,
             rawText: rawText,
             extractedPrompt: prompt,
@@ -206,7 +214,7 @@ final class AppViewModel: ObservableObject {
         let request = QueuedRequest(
             channelID: channelID,
             messageTS: messageTS,
-            threadTS: event.threadTs,
+            threadTS: rootThreadTS,
             prompt: prompt
         )
         pendingRequests.append(request)
@@ -256,18 +264,30 @@ final class AppViewModel: ObservableObject {
         appendLog("开始执行任务 \(task.id.uuidString.prefix(8))")
 
         do {
+            let promptWithContext = buildPromptWithContext(
+                channelID: request.channelID,
+                threadTS: request.threadTS,
+                latestPrompt: request.prompt
+            )
             let result = try await runner.run(
-                prompt: request.prompt,
+                prompt: promptWithContext,
                 executablePath: settings.claudeExecutablePath
             )
 
             let output = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
             let response = output.isEmpty ? "Claude 没有返回可见内容。" : output
-            let replyThreadTS = request.threadTS ?? request.messageTS
             try await webAPIClient.postMessage(
                 channel: request.channelID,
                 text: response,
-                threadTS: replyThreadTS
+                threadTS: request.threadTS
+            )
+            appendConversationTurns(
+                channelID: request.channelID,
+                threadTS: request.threadTS,
+                turns: [
+                    ConversationTurn(role: .user, text: request.prompt),
+                    ConversationTurn(role: .assistant, text: response)
+                ]
             )
 
             updateTask(
@@ -286,11 +306,18 @@ final class AppViewModel: ObservableObject {
             }
         } catch {
             let reason = error.localizedDescription
-            let replyThreadTS = request.threadTS ?? request.messageTS
             try? await webAPIClient.postMessage(
                 channel: request.channelID,
                 text: "❌ 执行失败：\(reason)",
-                threadTS: replyThreadTS
+                threadTS: request.threadTS
+            )
+            appendConversationTurns(
+                channelID: request.channelID,
+                threadTS: request.threadTS,
+                turns: [
+                    ConversationTurn(role: .user, text: request.prompt),
+                    ConversationTurn(role: .assistant, text: "执行失败：\(reason)")
+                ]
             )
 
             updateTask(
@@ -383,5 +410,70 @@ final class AppViewModel: ObservableObject {
         if mentionRecords.count > max(settings.maxHistoryItems, 100) {
             mentionRecords = Array(mentionRecords.prefix(max(settings.maxHistoryItems, 100)))
         }
+    }
+
+    private func buildPromptWithContext(channelID: String, threadTS: String, latestPrompt: String) -> String {
+        let key = conversationKey(channelID: channelID, threadTS: threadTS)
+        guard let conversation = threadConversations[key], !conversation.turns.isEmpty else {
+            return latestPrompt
+        }
+
+        let recentTurns = conversation.turns.suffix(maxTurnsPerThreadContext)
+        var sections: [String] = []
+        sections.append(
+            """
+            You are continuing an existing Slack thread conversation.
+            Use the conversation history to keep context and answer the latest user request.
+            """
+        )
+
+        let historyLines = recentTurns.map { turn in
+            let role = turn.role == .user ? "User" : "Assistant"
+            return "\(role): \(turn.text)"
+        }.joined(separator: "\n")
+        sections.append("Conversation history:\n\(historyLines)")
+        sections.append("Latest user request:\n\(latestPrompt)")
+        sections.append("Please answer as the assistant in this same Slack thread.")
+
+        appendLog("线程上下文已加载：\(recentTurns.count) 条历史消息。")
+        return sections.joined(separator: "\n\n")
+    }
+
+    private func appendConversationTurns(channelID: String, threadTS: String, turns: [ConversationTurn]) {
+        let normalizedTurns = turns.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !normalizedTurns.isEmpty else {
+            return
+        }
+
+        let key = conversationKey(channelID: channelID, threadTS: threadTS)
+        var conversation = threadConversations[key] ?? ThreadConversation(channelID: channelID, threadTS: threadTS)
+        conversation.turns.append(contentsOf: normalizedTurns)
+        let maxTurnCapacity = maxTurnsPerThreadContext * 2
+        if conversation.turns.count > maxTurnCapacity {
+            conversation.turns = Array(conversation.turns.suffix(maxTurnCapacity))
+        }
+        conversation.updatedAt = Date()
+        threadConversations[key] = conversation
+        persistConversations()
+    }
+
+    private func persistConversations() {
+        if threadConversations.count > maxStoredThreadContexts {
+            let sortedKeys = threadConversations
+                .sorted { $0.value.updatedAt > $1.value.updatedAt }
+                .prefix(maxStoredThreadContexts)
+                .map(\.key)
+            let keepKeys = Set(sortedKeys)
+            threadConversations = threadConversations.reduce(into: [:]) { partial, pair in
+                if keepKeys.contains(pair.key) {
+                    partial[pair.key] = pair.value
+                }
+            }
+        }
+        conversationStore.save(threadConversations)
+    }
+
+    private func conversationKey(channelID: String, threadTS: String) -> String {
+        "\(channelID)|\(threadTS)"
     }
 }

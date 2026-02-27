@@ -21,6 +21,7 @@ Claude Agent Connector helps teams keep AI-assisted execution inside their Slack
 - Serialized task queue for predictable local execution
 - Automatic threaded replies to Slack with success/failure output
 - Local history and runtime logs
+- Thread-level context memory: repeated mentions in same thread continue prior context
 - Dedicated **@mention records** panel, separate from task history
 - Tooltips and in-app quick links for token/path setup flow
 - Optional macOS user notifications
@@ -135,6 +136,7 @@ scripts/
 
 - Tasks are processed sequentially by design.
 - Trigger condition is mention-only: the message must mention the app user.
+- Context is tracked per `channel + thread_ts` and injected into subsequent prompts.
 - If Claude execution fails, an error message is posted to Slack.
 - The app is backend-free and runs fully on local machine.
 - Ensure your local Claude execution environment is trusted and monitored.

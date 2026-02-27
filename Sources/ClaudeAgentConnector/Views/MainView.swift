@@ -58,6 +58,9 @@ struct MainView: View {
                         .help("应用启动后自动连接 Slack。")
                     Toggle("任务完成发送系统通知", isOn: $viewModel.settings.notifyOnCompletion)
                         .help("Claude 任务完成时发送 macOS 系统通知。")
+                    Text("上下文策略：同一 Slack 线程里的再次 @提及，会自动携带该线程历史上下文。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     HStack {
                         Text("最大历史条数")
