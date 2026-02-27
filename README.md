@@ -100,7 +100,12 @@ Detailed release guide: [`docs/RELEASE.md`](docs/RELEASE.md)
 - `.github/workflows/ci-macos.yml`  
   Builds the app for push/PR validation.
 - `.github/workflows/release.yml`  
-  Builds and uploads release assets on version tags (`v*`).
+  Builds release packages on every push to `main` (including merged PRs) and on version tags (`v*`).
+  Tag-triggered runs additionally publish zip + checksum to the GitHub Release page.
+
+After each merge to `main`, download the packaged app from the **Build Release App** workflow artifact:
+
+- `ClaudeAgentConnector-release-<ref>-<sha>`
 
 To publish:
 

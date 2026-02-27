@@ -32,6 +32,18 @@ Build flow:
 
 It guarantees that project generation and macOS debug build remain healthy.
 
+## Automatic release packaging on merge
+
+`release.yml` runs automatically on:
+
+- pushes to `main` (for example, when a PR is merged)
+- semantic version tags matching `v*`
+
+On pushes to `main`, the workflow:
+
+- builds the macOS release app package
+- uploads artifacts to the workflow run for download
+
 ## Publish a version
 
 1. Create and push a semantic tag:
@@ -44,7 +56,7 @@ It guarantees that project generation and macOS debug build remain healthy.
 2. `release.yml` automatically:
    - builds release assets
    - uploads workflow artifacts
-   - attaches zip + checksum to GitHub Release
+   - attaches zip + checksum to GitHub Release (tag runs only)
 
 ## Versioning fields
 
