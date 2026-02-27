@@ -165,18 +165,24 @@ final class AppViewModel: ObservableObject {
     }
 
     private func acceptIncomingEvent(_ event: SlackMessageEvent) {
-        if shouldIgnoreEvent(event) {
+        let normalizedEvent = normalizeEventForTriggering(event)
+
+        if shouldIgnoreEvent(normalizedEvent) {
             return
         }
 
-        guard let channelID = event.channel, let messageTS = event.ts, let rawText = event.text else {
-            appendLog("忽略事件：缺少 channel/ts/text，type=\(event.type) subtype=\(event.subtype ?? "-")")
+        guard
+            let channelID = normalizedEvent.channel,
+            let messageTS = normalizedEvent.ts,
+            let rawText = normalizedEvent.text
+        else {
+            appendLog("忽略事件：缺少 channel/ts/text，type=\(normalizedEvent.type) subtype=\(normalizedEvent.subtype ?? "-")")
             return
         }
-        let rootThreadTS = event.threadTs ?? messageTS
+        let rootThreadTS = normalizedEvent.threadTs ?? messageTS
 
-        guard isMentionTrigger(event: event, text: rawText) else {
-            appendLog("忽略事件：未命中 @触发，type=\(event.type) channel=\(channelID)")
+        guard isMentionTrigger(event: normalizedEvent, text: rawText) else {
+            appendLog("忽略事件：未命中 @触发，type=\(normalizedEvent.type) channel=\(channelID)")
             return
         }
 
@@ -186,7 +192,7 @@ final class AppViewModel: ObservableObject {
                 channelID: channelID,
                 messageTS: messageTS,
                 threadTS: rootThreadTS,
-                userID: event.user,
+                userID: normalizedEvent.user,
                 rawText: rawText,
                 extractedPrompt: "",
                 status: .ignoredChannel
@@ -201,7 +207,7 @@ final class AppViewModel: ObservableObject {
                 channelID: channelID,
                 messageTS: messageTS,
                 threadTS: rootThreadTS,
-                userID: event.user,
+                userID: normalizedEvent.user,
                 rawText: rawText,
                 extractedPrompt: "",
                 status: .ignoredEmptyPrompt
@@ -213,7 +219,7 @@ final class AppViewModel: ObservableObject {
             channelID: channelID,
             messageTS: messageTS,
             threadTS: rootThreadTS,
-            userID: event.user,
+            userID: normalizedEvent.user,
             rawText: rawText,
             extractedPrompt: prompt,
             status: .queued
@@ -231,12 +237,35 @@ final class AppViewModel: ObservableObject {
         startQueueIfNeeded()
     }
 
+    private func normalizeEventForTriggering(_ event: SlackMessageEvent) -> SlackMessageEvent {
+        guard event.type == "message", event.subtype == "message_changed", let changed = event.message else {
+            return event
+        }
+
+        appendLog("展开事件：message_changed -> message，使用最新内容匹配 @触发。")
+        return SlackMessageEvent(
+            type: changed.type ?? "message",
+            subtype: changed.subtype,
+            user: changed.user ?? event.user,
+            text: changed.text ?? event.text,
+            channel: changed.channel ?? event.channel,
+            ts: changed.ts ?? event.ts,
+            threadTs: changed.threadTs ?? event.threadTs,
+            botId: changed.botId ?? event.botId,
+            message: nil,
+            previousMessage: event.previousMessage
+        )
+    }
+
     private func shouldIgnoreEvent(_ event: SlackMessageEvent) -> Bool {
         if event.type == "message", let subtype = event.subtype {
             // Ignore system/update wrappers; only plain user message should trigger.
             switch subtype {
-            case "message_changed", "message_deleted", "message_replied", "bot_message":
+            case "message_deleted", "message_replied", "bot_message":
                 appendLog("忽略事件：message 子类型 \(subtype) 不参与触发。")
+                return true
+            case "message_changed":
+                appendLog("忽略事件：message_changed 缺少可用消息体。")
                 return true
             default:
                 break

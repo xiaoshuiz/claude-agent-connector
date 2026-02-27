@@ -29,6 +29,17 @@ struct SlackSocketPayload: Decodable {
     let event: SlackMessageEvent?
 }
 
+struct SlackEmbeddedMessage: Decodable {
+    let type: String?
+    let subtype: String?
+    let user: String?
+    let text: String?
+    let channel: String?
+    let ts: String?
+    let threadTs: String?
+    let botId: String?
+}
+
 struct SlackMessageEvent: Decodable {
     let type: String
     let subtype: String?
@@ -38,4 +49,6 @@ struct SlackMessageEvent: Decodable {
     let ts: String?
     let threadTs: String?
     let botId: String?
+    let message: SlackEmbeddedMessage?
+    let previousMessage: SlackEmbeddedMessage?
 }

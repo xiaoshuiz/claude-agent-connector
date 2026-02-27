@@ -101,7 +101,7 @@ Detailed release guide: [`docs/RELEASE.md`](docs/RELEASE.md)
   Builds the app for push/PR validation.
 - `.github/workflows/release.yml`  
   Builds release packages on every push to `main` (including merged PRs) and on version tags (`v*`).
-  Tag-triggered runs additionally publish zip + checksum to the GitHub Release page.
+  Main-branch runs also refresh a rolling prerelease (`main-latest`) in GitHub Releases, while tag-triggered runs publish versioned releases with zip + checksum.
 
 After each merge to `main`, download the packaged app from the **Build Release App** workflow artifact:
 
@@ -143,6 +143,7 @@ scripts/
 
 - Tasks are processed sequentially by design.
 - Trigger condition is mention-only: the message must mention the app user.
+- Edited messages (`message_changed`) are normalized to latest text before mention matching.
 - Context is tracked per `channel + thread_ts` and injected into subsequent prompts.
 - If Claude execution fails, an error message is posted to Slack.
 - The app is backend-free and runs fully on local machine.
