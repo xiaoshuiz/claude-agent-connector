@@ -23,7 +23,3 @@ struct AppSettings: Codable, Equatable {
     }
 }
 
-struct ConnectorSecrets {
-    var appLevelToken: String
-    var botToken: String
-}

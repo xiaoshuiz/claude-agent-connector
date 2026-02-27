@@ -174,6 +174,11 @@ final class AppViewModel: ObservableObject {
             return
         }
 
+        guard !isDuplicateRequest(channelID: channelID, messageTS: messageTS) else {
+            appendLog("检测到重复事件，已跳过，channel=\(channelID) ts=\(messageTS)")
+            return
+        }
+
         if !settings.normalizedChannelIDs.isEmpty && !settings.normalizedChannelIDs.contains(channelID) {
             recordMention(
                 channelID: channelID,
@@ -364,6 +369,16 @@ final class AppViewModel: ObservableObject {
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !botUserID.isEmpty, trimmed.contains("<@\(botUserID)>") {
+            return true
+        }
+        return false
+    }
+
+    private func isDuplicateRequest(channelID: String, messageTS: String) -> Bool {
+        if pendingRequests.contains(where: { $0.channelID == channelID && $0.messageTS == messageTS }) {
+            return true
+        }
+        if tasks.contains(where: { $0.sourceChannelID == channelID && $0.sourceMessageTS == messageTS }) {
             return true
         }
         return false

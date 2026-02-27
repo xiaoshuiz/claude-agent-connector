@@ -39,24 +39,69 @@ final class ClaudeAgentRunner {
             process.standardOutput = outputPipe
             process.standardError = errorPipe
 
+            let outputHandle = outputPipe.fileHandleForReading
+            let errorHandle = errorPipe.fileHandleForReading
+            let outputLock = NSLock()
+            let errorLock = NSLock()
+            var outputData = Data()
+            var errorData = Data()
+            let streamCompletionGroup = DispatchGroup()
+            streamCompletionGroup.enter()
+            streamCompletionGroup.enter()
+
+            outputHandle.readabilityHandler = { handle in
+                let chunk = handle.availableData
+                if chunk.isEmpty {
+                    handle.readabilityHandler = nil
+                    streamCompletionGroup.leave()
+                    return
+                }
+                outputLock.lock()
+                outputData.append(chunk)
+                outputLock.unlock()
+            }
+
+            errorHandle.readabilityHandler = { handle in
+                let chunk = handle.availableData
+                if chunk.isEmpty {
+                    handle.readabilityHandler = nil
+                    streamCompletionGroup.leave()
+                    return
+                }
+                errorLock.lock()
+                errorData.append(chunk)
+                errorLock.unlock()
+            }
+
             process.terminationHandler = { _ in
-                let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                DispatchQueue.global(qos: .utility).async {
+                    streamCompletionGroup.wait()
 
-                let output = String(data: outputData, encoding: .utf8) ?? ""
-                let errorOutput = String(data: errorData, encoding: .utf8) ?? ""
-                let code = process.terminationStatus
+                    outputLock.lock()
+                    let outputSnapshot = outputData
+                    outputLock.unlock()
 
-                if code == 0 {
-                    continuation.resume(returning: ClaudeRunResult(output: output, errorOutput: errorOutput, exitCode: code))
-                } else {
-                    continuation.resume(throwing: ClaudeAgentRunnerError.nonZeroExit(code, errorOutput.isEmpty ? output : errorOutput))
+                    errorLock.lock()
+                    let errorSnapshot = errorData
+                    errorLock.unlock()
+
+                    let output = String(data: outputSnapshot, encoding: .utf8) ?? ""
+                    let errorOutput = String(data: errorSnapshot, encoding: .utf8) ?? ""
+                    let code = process.terminationStatus
+
+                    if code == 0 {
+                        continuation.resume(returning: ClaudeRunResult(output: output, errorOutput: errorOutput, exitCode: code))
+                    } else {
+                        continuation.resume(throwing: ClaudeAgentRunnerError.nonZeroExit(code, errorOutput.isEmpty ? output : errorOutput))
+                    }
                 }
             }
 
             do {
                 try process.run()
             } catch {
+                outputHandle.readabilityHandler = nil
+                errorHandle.readabilityHandler = nil
                 continuation.resume(throwing: ClaudeAgentRunnerError.executionFailed(error.localizedDescription))
             }
         }
