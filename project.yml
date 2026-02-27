@@ -3,7 +3,7 @@ name: ClaudeAgentConnector
 options:
   minimumXcodeGenVersion: 2.39.1
   createIntermediateGroups: true
-  developmentLanguage: zh-Hans
+  developmentLanguage: en
 
 settings:
   base:
@@ -19,11 +19,14 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: Sources/ClaudeAgentConnector
+      - path: Resources
+        buildPhase: resources
     settings:
       base:
         PRODUCT_NAME: ClaudeAgentConnector
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Claude Agent Connector
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
         INFOPLIST_KEY_NSPrincipalClass: NSApplication

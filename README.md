@@ -1,75 +1,63 @@
 # Claude Agent Connector
 
-一个面向 macOS 的桌面应用，用于把 Slack 消息桥接到本地 Claude Agent（Claude Code CLI），并把执行结果自动回帖到 Slack 线程。
+A macOS desktop app that connects Slack conversations with a local Claude CLI agent.  
+When a configured trigger message appears in Slack, the app runs Claude locally and posts the result back to the same thread.
 
-## 核心能力
+## What this project solves
 
-- **SwiftUI + AppKit** 桌面应用界面（含状态栏菜单）
-- **Slack Socket Mode** 实时监听消息事件
-- 支持 `xapp-`（App-level token）与 `xoxb-`（Bot token）配置
-- 监听指定频道（可多个频道 ID）
-- 支持命令前缀触发（默认 `/claude`）和 bot mention 触发
-- 调用本地 `claude` 命令执行任务并将结果回复到 Slack
-- Keychain 安全保存 token（非 macOS 环境下自动降级为本地存储）
-- 任务历史、运行日志、失败回帖、系统通知
+Claude Agent Connector helps teams keep AI-assisted execution inside their Slack workflow while still using local credentials, local tooling, and local context. It is especially useful when:
 
-## 目录结构
+- you want a lightweight Slack-to-Claude bridge without hosting a backend service,
+- you want control over local execution paths and logs,
+- you prefer a native macOS utility with a menu bar presence.
 
-```text
-Sources/ClaudeAgentConnector
-├── ClaudeAgentConnectorApp.swift
-├── AppViewModel.swift
-├── StatusBarController.swift
-├── Models
-│   ├── AgentTask.swift
-│   ├── AppSettings.swift
-│   └── SlackModels.swift
-├── Services
-│   ├── ClaudeAgentRunner.swift
-│   ├── KeychainStore.swift
-│   ├── NotificationService.swift
-│   ├── SettingsStore.swift
-│   ├── SlackSocketModeClient.swift
-│   ├── SlackWebAPIClient.swift
-│   └── TaskHistoryStore.swift
-└── Views
-    └── MainView.swift
-```
+## Key capabilities
 
-## 环境要求
+- Native **SwiftUI + AppKit** macOS app (main window + menu bar status item)
+- Real-time Slack event intake using **Socket Mode**
+- Secure token persistence via **Keychain**
+- Trigger by command prefix (default `/claude`) or bot mention
+- Configurable channel allowlist (comma-separated channel IDs)
+- Serialized task queue for predictable local execution
+- Automatic threaded replies to Slack with success/failure output
+- Local history and runtime logs
+- Optional macOS user notifications
+- Branded app icon asset set for release builds
+
+## Architecture at a glance
+
+1. `SlackSocketModeClient` receives `events_api` envelopes.
+2. `AppViewModel` acknowledges envelopes, filters events, and queues tasks.
+3. `ClaudeAgentRunner` executes `claude -p "<prompt>"`.
+4. `SlackWebAPIClient` posts the result back through `chat.postMessage`.
+5. `TaskHistoryStore` + `SettingsStore` persist state locally.
+
+Additional architecture notes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+
+## Requirements
 
 - macOS 14+
 - Xcode 15+
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen)（用于生成 `.xcodeproj`）
-- 本地已安装 Claude CLI（`claude`）
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+- Claude CLI available on local machine (default path: `/usr/local/bin/claude`)
 
-## 运行前准备
+## Slack app configuration
 
-### 1) Slack App 配置
+Create or update your Slack app with:
 
-在你的 Slack App 中启用并配置：
+- **Socket Mode** enabled
+- **Event Subscriptions** enabled (for example: `app_mention`, `message.channels`)
+- Bot scopes (minimum):
+  - `chat:write`
+  - `app_mentions:read`
+  - `channels:history` (if you read channel messages)
 
-1. **Socket Mode**（开启）
-2. **Event Subscriptions**（订阅 `app_mention`、`message.channels` 等你需要的事件）
-3. Bot OAuth Scopes 至少包含：
-   - `chat:write`
-   - `channels:history`（按需）
-   - `app_mentions:read`
-4. 安装到目标工作区后，拿到：
-   - `xapp-...` App-level Token
-   - `xoxb-...` Bot Token
+Then collect:
 
-### 2) 本地 Claude CLI
+- App-level token (`xapp-...`)
+- Bot token (`xoxb-...`)
 
-确保机器上可执行 `claude` 命令，默认路径：
-
-```bash
-/usr/local/bin/claude
-```
-
-如果路径不同，可在应用设置中修改。
-
-## 开发运行
+## Local development
 
 ```bash
 brew install xcodegen
@@ -77,55 +65,67 @@ xcodegen generate --spec project.yml
 open ClaudeAgentConnector.xcodeproj
 ```
 
-然后在 Xcode 中运行 `ClaudeAgentConnector`（Debug）。
-
-也可以命令行构建：
+Or build from command line:
 
 ```bash
 make debug-build
 ```
 
-## 构建 release app
-
-### 本地打包（生成可分发 zip）
+## Build a release app
 
 ```bash
 make release
 ```
 
-产物位于：
+Output:
 
 - `dist/ClaudeAgentConnector-macOS-Release.zip`
 - `dist/ClaudeAgentConnector-macOS-Release.zip.sha256`
 
-### GitHub Actions 自动 release
+Detailed release guide: [`docs/RELEASE.md`](docs/RELEASE.md)
 
-仓库已内置两个工作流：
+## CI and release automation
 
-- `.github/workflows/ci-macos.yml`：每次 push/PR 在 macOS 上构建
-- `.github/workflows/release.yml`：tag 发布时自动打包并上传 release 资产
+- `.github/workflows/ci-macos.yml`  
+  Builds the app for push/PR validation.
+- `.github/workflows/release.yml`  
+  Builds and uploads release assets on version tags (`v*`).
 
-触发正式发布：
+To publish:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-随后在 GitHub Release 页面可直接下载 zip 版 app。
+## App icon
 
-## 使用流程
+The repository includes a full macOS `AppIcon` set under:
 
-1. 打开应用，填写 `xapp`、`xoxb`、监听频道 ID。
-2. 配置 Claude 命令路径与触发前缀（默认 `/claude`）。
-3. 点击「连接」。
-4. 在 Slack 目标频道发送：
-   - `/claude 你的任务`
-   - 或 `@bot 你的任务`
-5. 应用执行本地 Claude，完成后自动在线程中回复结果。
+- `Resources/Assets.xcassets/AppIcon.appiconset`
 
-## 注意事项
+The icon is generated by:
 
-- 当前版本采用**串行任务队列**，避免并发执行导致本地环境竞争。
-- 若 `claude` 执行失败，会自动在线程回复错误信息。
-- 若开启通知，任务完成会触发系统通知。
+- `scripts/generate_app_icon.py`
+
+Design notes: [`docs/ICON.md`](docs/ICON.md)
+
+## Project layout
+
+```text
+Resources/
+  Assets.xcassets/
+Sources/ClaudeAgentConnector/
+  Models/
+  Services/
+  Views/
+docs/
+scripts/
+```
+
+## Runtime behavior and limits
+
+- Tasks are processed sequentially by design.
+- If Claude execution fails, an error message is posted to Slack.
+- The app is backend-free and runs fully on local machine.
+- Ensure your local Claude execution environment is trusted and monitored.

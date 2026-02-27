@@ -1,54 +1,54 @@
-# Release 流程
+# Release Playbook
 
-## 一、目标产物
+## Release outputs
 
-发布产物为 macOS App 压缩包：
+Every release publishes:
 
 - `ClaudeAgentConnector-macOS-Release.zip`
 - `ClaudeAgentConnector-macOS-Release.zip.sha256`
 
-## 二、本地构建
+## Build locally
 
-前提：macOS + Xcode + XcodeGen。
+Prerequisites: macOS, Xcode, XcodeGen.
 
 ```bash
 brew install xcodegen
 make release
 ```
 
-脚本执行逻辑：
+Build flow:
 
-1. `xcodegen generate --spec project.yml`
-2. `xcodebuild ... -configuration Release`
-3. 使用 `ditto` 打包 `.app` 为 zip
-4. 生成 SHA256 校验文件
+1. Generate Xcode project from `project.yml`
+2. Build `Release` with `xcodebuild`
+3. Package `.app` into zip using `ditto`
+4. Produce SHA256 checksum file
 
-## 三、CI 验证
+## CI validation
 
-`ci-macos.yml` 在以下场景自动运行：
+`ci-macos.yml` runs on:
 
-- PR
-- push 到 `main` 与 `cursor/**`
+- pull requests
+- pushes to `main` and `cursor/**`
 
-它会生成工程并执行 Debug 构建，确保主干可编译。
+It guarantees that project generation and macOS debug build remain healthy.
 
-## 四、正式发布
+## Publish a version
 
-1. 创建并推送语义化 tag（例如 `v0.1.0`）：
+1. Create and push a semantic tag:
 
    ```bash
    git tag v0.1.0
    git push origin v0.1.0
    ```
 
-2. `release.yml` 会自动：
-   - 构建 Release app
-   - 上传构建产物到 workflow artifact
-   - 将 zip 与 sha256 附件发布到 GitHub Release
+2. `release.yml` automatically:
+   - builds release assets
+   - uploads workflow artifacts
+   - attaches zip + checksum to GitHub Release
 
-## 五、版本号管理
+## Versioning fields
 
-在 `project.yml` 中维护：
+Manage versions in `project.yml`:
 
-- `MARKETING_VERSION`：展示版本（如 0.1.0）
-- `CURRENT_PROJECT_VERSION`：构建号（递增整数）
+- `MARKETING_VERSION` (human-readable app version, e.g. `0.1.0`)
+- `CURRENT_PROJECT_VERSION` (incrementing build number)
